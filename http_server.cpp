@@ -4,7 +4,6 @@
 #include <utility>
 #include <boost/asio.hpp>
 #include <boost/algorithm/string.hpp>
-#include <set>
 #include <vector>
 
 using boost::asio::ip::tcp;
@@ -71,16 +70,13 @@ private:
         {
           if (!ec)
           {
-            cout<< data_<< endl;
             string data = data_;
             parse(data);
-            set_cgi();
-            socket_.close();
+            do_write();
           }
         });
   }
   void set_cgi(){
-    cout << socket_.remote_endpoint() << endl;
     if(fork()==0){
       dup2(socket_.native_handle(),STDOUT_FILENO);
       dup2(socket_.native_handle(),STDIN_FILENO);
@@ -89,7 +85,7 @@ private:
       setenv("PATH", PATH.c_str(), 1);
       setenv("REQUEST_METHOD", d.REQUEST_METHOD.c_str(), 1);
       setenv("REQUEST_URI", d.REQUEST_URI.c_str(), 1);
-      setenv("QUERY_SRING", d.QUERY_STRING.c_str(), 1);
+      setenv("QUERY_STRING", d.QUERY_STRING.c_str(), 1);
       setenv("SERVER_PROTOCOL", d.SERVER_PROTOCOL.c_str(), 1);
       setenv("HTTP_HOST", d.HTTP_HOST.c_str(), 1);
       setenv("SERVER_ADDR", socket_.local_endpoint().address().to_string().c_str(), 1);
@@ -104,15 +100,17 @@ private:
     }
   }
 
-  void do_write(std::size_t length)
+  void do_write()
   {
+    string status = "HTTP/1.1 200 OK \r\n";
     auto self(shared_from_this());
-    boost::asio::async_write(socket_, boost::asio::buffer(data_, length),
+    boost::asio::async_write(socket_, boost::asio::buffer(status),
         [this, self](boost::system::error_code ec, std::size_t /*length*/)
         {
           if (!ec)
           {
-            do_read();
+            set_cgi();
+            socket_.close();
           }
         });
   }
@@ -136,13 +134,11 @@ private:
           if (!ec)
           {
             auto s = std::make_shared<session>(std::move(socket));
-            sessions.insert(s);
             s->start();
           }
           do_accept();
         });
   }
-  std::set<std::shared_ptr<session>> sessions;
   tcp::acceptor acceptor_;
 };
 
@@ -157,9 +153,7 @@ int main(int argc, char* argv[])
     }
 
     boost::asio::io_context io_context;
-
     server s(io_context, std::atoi(argv[1]));
-
     io_context.run();
   }
   catch (std::exception& e)
