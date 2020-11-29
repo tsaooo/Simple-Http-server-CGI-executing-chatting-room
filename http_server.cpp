@@ -17,17 +17,11 @@ class session
 {
 public:
   session(tcp::socket socket)
-    : socket_(std::move(socket))
-    {
-    }
+    : socket_(std::move(socket)){}
 
   void start()
   {
     do_read();
-    string data = data_;
-    parse(data);
-    set_cgi();
-    socket_.close();
   }
 
 private:
@@ -78,16 +72,21 @@ private:
           if (!ec)
           {
             cout<< data_<< endl;
+            string data = data_;
+            parse(data);
+            set_cgi();
+            socket_.close();
           }
         });
   }
   void set_cgi(){
+    cout << socket_.remote_endpoint() << endl;
     if(fork()==0){
       dup2(socket_.native_handle(),STDOUT_FILENO);
       dup2(socket_.native_handle(),STDIN_FILENO);
-      dup2(socket_.native_handle(),STDERR_FILENO);
-      socket_.close();
-      setenv("PATH", ".", 1);
+      string PATH = getenv("PATH");
+      PATH += ":.";
+      setenv("PATH", PATH.c_str(), 1);
       setenv("REQUEST_METHOD", d.REQUEST_METHOD.c_str(), 1);
       setenv("REQUEST_URI", d.REQUEST_URI.c_str(), 1);
       setenv("QUERY_SRING", d.QUERY_STRING.c_str(), 1);
@@ -97,13 +96,12 @@ private:
       setenv("SERVER_PORT", std::to_string(socket_.local_endpoint().port()).c_str(), 1);
       setenv("REMOTE_ADDR", socket_.remote_endpoint().address().to_string().c_str(), 1);
       setenv("REMOTE_PORT", std::to_string(socket_.remote_endpoint().port()).c_str(), 1);
+      socket_.close();
+
       execlp(d.REQUEST_URI.c_str(), d.REQUEST_URI.c_str(), NULL);
       std::cerr << std::strerror(errno);
       exit(0);
     }
-  }
-  void disconnect(){
-
   }
 
   void do_write(std::size_t length)
