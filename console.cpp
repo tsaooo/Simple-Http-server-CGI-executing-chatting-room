@@ -19,6 +19,25 @@ struct info{
     string doc;
 };
 
+void escape(string &s){
+    boost::replace_all(s, "\'", "\\\'");
+    boost::replace_all(s, "&", "&amp;");
+    boost::replace_all(s, ">", "&gt;");
+    boost::replace_all(s, "<", "&lt;");
+    boost::replace_all(s, "\n", "&NewLine;");
+  }
+void to_client_res(string id, string response){
+    escape(response);
+    //sprintf(str, "<script>document.getElementById('%s').innerHTML += '%s';</script>", id.c_str(), response.c_str());
+    cout << "<script>document.getElementById('" << id << "').innerHTML += '" << response << "';</script>" << std::flush;
+}
+void to_client_cmd(string id, string response)
+{
+    escape(response);
+    //sprintf(str, "<script>document.getElementById('%s').innerHTML += '<b>%s</b>';</script>", id.c_str(), response.c_str());
+    cout << "<script>document.getElementById('" << id << "').innerHTML += '<b>" << response << "</b>';</script>" << std::flush;
+}
+
 class session
     : public std::enable_shared_from_this<session>
 {
@@ -44,23 +63,15 @@ private:
   enum{ max_length = 1024};
   char data_[max_length];
 
-  void escape(string &s){
-    boost::replace_all(s, "&", "&amp;");
-    boost::replace_all(s, ">", "&gt;");
-    boost::replace_all(s, "<", "&lt;");
-    boost::replace_all(s, "\n", "&NewLine;");
-  }
   void on_resolve(boost::system::error_code ec, tcp::resolver::results_type endpoints)
   {
     if (!ec)
     {
-      std::cerr << "on_resolve\n";
       auto self = shared_from_this();
       boost::asio::async_connect(socket_, endpoints,
                                  [this, self](boost::system::error_code ec, tcp::endpoint endpoint) {
                                    if (!ec)
                                    {
-                                     std::cerr << "on_connect\n";
                                      do_read();
                                    }
                                    else
@@ -71,45 +82,30 @@ private:
                                  });
     }
   }
-  void to_client_cmd()
-  {
-    std::cerr <<"to client_cmd:\n";
-    std::cerr << response << endl;
-    char str[100];
-    escape(response);
-    sprintf(str, "<script>document.getElementById('%s').innerHTML += '<b>%s</b>';</script>", id_.c_str(), response.c_str());
-    string s = str;
-    cout << s << std::flush;
-    response.clear();
-  }
-  void to_client_res(){
-    std::cerr <<"to client_res:\n";
-    std::cerr << response << endl;
-    char str[100];
-    escape(response);
-    sprintf(str, "<script>document.getElementById('%s').innerHTML += '%s';</script>", id_.c_str(), response.c_str());
-    string s = str;
-    cout << s << std::flush;
-    response.clear();
-  }
 
   void do_read()
   {
     auto self(shared_from_this());
+    bzero(data_, max_length);
     socket_.async_read_some(boost::asio::buffer(data_, max_length),
                             [this, self](boost::system::error_code ec, std::size_t length) {
-                              std::cerr << "on_read\n";
                               if (!ec)
                               {
-                                std::cerr << "on_read\n";
+                                response.clear();
                                 response += data_;
-                                to_client_res();
-                                if (response.find("%") != string::npos)
+                                if (response.find("%") != string::npos){
+                                  to_client_res(id_, response);
                                   do_write();
-                                else
+                                }
+                                else{
+                                  to_client_res(id_, response);
                                   do_read();
+                                }
                               }
+                              else 
+                                std::cerr << ec.message() << endl;
                             });
+    std::cerr<< "hi\n";
   }
 
   void do_write()
@@ -117,16 +113,17 @@ private:
     string cmd;
     if(getline(file, cmd))
     {
-      response = cmd;
-      to_client_cmd();
+      cmd += "\n";
+      to_client_cmd(id_, cmd);
       auto self(shared_from_this());
-      boost::asio::async_write(socket_, boost::asio::buffer(cmd),
+      boost::asio::async_write(socket_, boost::asio::buffer(cmd.c_str(), cmd.size()),
                               [this, self](boost::system::error_code ec, std::size_t /*length*/) {
-                                std::cerr << "on_w\n";
                                 if (!ec)
                                 {
-                                  std::cerr << "on_w\n";
                                   do_read();
+                                }
+                                else{
+                                  std::cerr << ec.message() << endl;
                                 }
                               });
     }
@@ -198,10 +195,12 @@ void prt_html(std::vector <std::shared_ptr<session>> &sessions){
           href="https://fonts.googleapis.com/css?family=Source+Code+Pro"
           rel="stylesheet"
         />
-        <link
-          rel="icon"
-          type="image/png"
-          href="https://cdn0.iconfinder.com/data/icons/small-n-flat/24/678068-terminal-512.png"
+        <linkvoid escape(string &s){
+    boost::replace_all(s, "&", "&amp;");
+    boost::replace_all(s, ">", "&gt;");
+    boost::replace_all(s, "<", "&lt;");
+    boost::replace_all(s, "\n", "&NewLine;");
+  }n0.iconfinder.com/data/icons/small-n-flat/24/678068-terminal-512.png"
         />
         <style>
           * {
@@ -240,9 +239,9 @@ void prt_html(std::vector <std::shared_ptr<session>> &sessions){
   cout << h << std::flush;
 }
 
+
 int main(int argc, char *argv[])
 {
-
   try
   {
     boost::asio::io_context io_context;

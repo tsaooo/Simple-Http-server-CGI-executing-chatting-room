@@ -40,14 +40,15 @@ private:
   void parse(string data){
     std::vector<string> headers;
     //boost::split(headers, data, boost::is_any_of("\n"), boost::token_compress_on);
-    size_t p;
+    std::size_t p;
     string line = data.substr(0, (p = data.find("\r\n")));
     data.erase(0, p+2);
     boost::split(headers, line, boost::is_any_of(" "), boost::token_compress_on);
+
     auto it = headers.begin();
     d.REQUEST_METHOD = *it;
     it++;
-    size_t q = (*it).find('?');
+    std::size_t q = (*it).find('?');
     if(q != string::npos){
       d.REQUEST_URI = (*it).substr(1, q-1);
       d.QUERY_STRING = (*it).substr(q+1);
@@ -56,10 +57,12 @@ private:
       d.REQUEST_URI = (*it).substr(1);
       d.QUERY_STRING = "";
     }
+
     it++;
     d.SERVER_PROTOCOL = *it;
     p = data.find(' ')+1;
-    d.HTTP_HOST = data.substr(p, data.find("\r\n")-p);
+    std::size_t a  = data.find("\r\n");
+    d.HTTP_HOST = data.substr(p, a-p);
   }
 
   void do_read()
@@ -71,6 +74,7 @@ private:
           if (!ec)
           {
             string data = data_;
+            cout << "http data: " << data << endl;
             parse(data);
             do_write();
           }
@@ -80,9 +84,6 @@ private:
     if(fork()==0){
       dup2(socket_.native_handle(),STDOUT_FILENO);
       dup2(socket_.native_handle(),STDIN_FILENO);
-      string PATH = getenv("PATH");
-      PATH += ":.";
-      setenv("PATH", PATH.c_str(), 1);
       setenv("REQUEST_METHOD", d.REQUEST_METHOD.c_str(), 1);
       setenv("REQUEST_URI", d.REQUEST_URI.c_str(), 1);
       setenv("QUERY_STRING", d.QUERY_STRING.c_str(), 1);
@@ -95,14 +96,14 @@ private:
       socket_.close();
 
       execlp(d.REQUEST_URI.c_str(), d.REQUEST_URI.c_str(), NULL);
-      std::cerr << std::strerror(errno);
+      std::cerr << "error: " << std::strerror(errno);
       exit(0);
     }
   }
 
   void do_write()
   {
-    string status = "HTTP/1.1 200 OK \r\n";
+    string status = "HTTP/1.1 200 OK\r\n";
     auto self(shared_from_this());
     boost::asio::async_write(socket_, boost::asio::buffer(status),
         [this, self](boost::system::error_code ec, std::size_t /*length*/)
@@ -112,6 +113,7 @@ private:
             set_cgi();
             socket_.close();
           }
+        
         });
   }
 };
@@ -133,6 +135,7 @@ private:
         {
           if (!ec)
           {
+            cout << "accept\n";
             auto s = std::make_shared<session>(std::move(socket));
             s->start();
           }
