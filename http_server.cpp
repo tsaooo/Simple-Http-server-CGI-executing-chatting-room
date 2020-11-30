@@ -137,11 +137,13 @@ private:
           {
             cout << "accept\n";
             auto s = std::make_shared<session>(std::move(socket));
+            sessions.push_back(s);
             s->start();
           }
           do_accept();
         });
   }
+  std::vector<std::shared_ptr<session>> sessions;
   tcp::acceptor acceptor_;
 };
 
