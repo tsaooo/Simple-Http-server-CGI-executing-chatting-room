@@ -1,4 +1,6 @@
 #include <stdlib.h>
+#include <fstream>
+#include <string>
 #include <iostream>
 #include <memory>
 #include <utility>
@@ -11,6 +13,13 @@ using std::string;
 using std::cout;
 using std::endl;
 
+void escape(string &s){
+    boost::replace_all(s, "\'", "\\\'");
+    boost::replace_all(s, "&", "&amp;");
+    boost::replace_all(s, ">", "&gt;");
+    boost::replace_all(s, "<", "&lt;");
+    boost::replace_all(s, "\n", "&NewLine;");
+}
 class npserver_session
     : public std::enable_shared_from_this<npserver_session>
 {
@@ -19,8 +28,8 @@ public:
 
   npserver_session(boost::asio::io_context &ioc,
           string &host, string &port, string &doc, string &id, tcp::socket &cli_sock)
-      : host_(host), port_(port), id_(id), doc_(doc), cli_socket_(cli_sock), socket_(ioc), resolver_(ioc)
-  {}
+      : host_(host), port_(port), id_(id), doc_(doc), cli_socket_(cli_sock), socket_(ioc), resolver_(ioc){}
+
   void start(){
     string path = "./test_case/" + doc_;
     file.open(path);
@@ -42,7 +51,7 @@ private:
     escape(response);
     //sprintf(str, "<script>document.getElementById('%s').innerHTML += '%s';</script>", id.c_str(), response.c_str());
     string script = "";
-    script += "<script>document.getElementById('" + std::to_string(id) + "').innerHTML += '" + response + "';</script>";
+    script += "<script>document.getElementById('" + id + "').innerHTML += '" + response + "';</script>";
     auto self(shared_from_this());
     boost::asio::async_write(cli_socket_, boost::asio::buffer(script),
                             [this, self](boost::system::error_code ec, std::size_t /*length*/)
@@ -61,12 +70,12 @@ private:
       escape(response);
       //cout << "<script>document.getElementById('" << id << "').innerHTML += '<b>" << response << "</b>';</script>" << std::flush;
       string script = "";
-      script += "<script>document.getElementById('" + std::to_string(id) + "').innerHTML += '" + response + "';</script>";
+      script += "<script>document.getElementById('" + id + "').innerHTML += '" + response + "';</script>";
       auto self(shared_from_this());
       boost::asio::async_write(cli_socket_, boost::asio::buffer(script),
                               [this, self](boost::system::error_code ec, std::size_t /*length*/)
                               {
-                                if(!ec)
+                                if(!ec);
                                   //do_write();
                                 else
                                   std::cerr << "to clinet error: " << ec.message() << endl;
@@ -92,7 +101,7 @@ private:
   void do_read()
   {
     auto self(shared_from_this());
-    bzero(data_, max_length);
+    memset(data_, 0, max_length);
     socket_.async_read_some(boost::asio::buffer(data_, max_length),
                             [this, self](boost::system::error_code ec, std::size_t length) {
                               if (!ec)
@@ -143,9 +152,8 @@ class http_session
   : public std::enable_shared_from_this<http_session>
 {
 public:
-  http_session(tcp::socket socket)
-    socket_(std::move(socket))
-  {}
+  http_session(tcp::socket socket, boost::asio::io_context &ioc) 
+  : socket_(std::move(socket)), ioc(ioc){}
 
   void start()
   {
@@ -154,6 +162,7 @@ public:
 
 private:
   tcp::socket socket_;
+  boost::asio::io_context &ioc;
   enum { max_length = 1024 };
   char data_[max_length];
   std::vector<std::shared_ptr<npserver_session>> sessions;
@@ -210,7 +219,7 @@ private:
         std::cerr << host << " " << port << " " << doc << " " << id << endl;
 
         //auto cli_sock = std::make_shared<tcp::socket>(socket_); 
-        auto s = std::make_shared<session>(io_context_, host, port, doc, id, socket_);
+        auto s = std::make_shared<npserver_session>(ioc, host, port, doc, id, socket_);
         sessions.push_back(s);
       }
     }
@@ -392,12 +401,13 @@ private:
         </body>
       </html>)";
     h += end;
+    auto self(shared_from_this());
     boost::asio::async_write(socket_, boost::asio::buffer(h),
         [this, self](boost::system::error_code ec, std::size_t /*length*/)
         {
           if (!ec)
           {
-            socket_close();
+            socket_.close();
           }
         });
   }
@@ -405,7 +415,7 @@ private:
   void do_read()
   {
     auto self(shared_from_this());
-    socket_->async_read_some(boost::asio::buffer(data_, max_length),
+    socket_.async_read_some(boost::asio::buffer(data_, max_length),
         [this, self](boost::system::error_code ec, std::size_t length)
         {
           if (!ec)
@@ -442,7 +452,7 @@ class server
 {
 public:
   server(boost::asio::io_context& io_context, short port)
-    : acceptor_(io_context, tcp::endpoint(tcp::v4(), port))
+    : ioc(io_context), acceptor_(io_context, tcp::endpoint(tcp::v4(), port))
   {
     do_accept();
   }
@@ -456,12 +466,13 @@ private:
           if (!ec)
           {
             cout << "accept\n";
-            auto s = std::make_shared<http_session>(std::move(socket));
+            auto s = std::make_shared<http_session>(std::move(socket), ioc);
             s->start();
           }
           do_accept();
         });
   }
+  boost::asio::io_context &ioc;
   tcp::acceptor acceptor_;
 };
 

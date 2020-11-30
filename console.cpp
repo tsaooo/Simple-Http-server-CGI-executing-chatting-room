@@ -86,7 +86,7 @@ private:
   void do_read()
   {
     auto self(shared_from_this());
-    bzero(data_, max_length);
+    memset(data_, 0, max_length);
     socket_.async_read_some(boost::asio::buffer(data_, max_length),
                             [this, self](boost::system::error_code ec, std::size_t length) {
                               if (!ec)
@@ -195,12 +195,10 @@ void prt_html(std::vector <std::shared_ptr<session>> &sessions){
           href="https://fonts.googleapis.com/css?family=Source+Code+Pro"
           rel="stylesheet"
         />
-        <linkvoid escape(string &s){
-    boost::replace_all(s, "&", "&amp;");
-    boost::replace_all(s, ">", "&gt;");
-    boost::replace_all(s, "<", "&lt;");
-    boost::replace_all(s, "\n", "&NewLine;");
-  }n0.iconfinder.com/data/icons/small-n-flat/24/678068-terminal-512.png"
+        <link
+          rel="icon"
+          type="image/png"
+          href="https://cdn4.iconfinder.com/data/icons/iconsimple-setting-time/512/dashboard-512.png"
         />
         <style>
           * {
