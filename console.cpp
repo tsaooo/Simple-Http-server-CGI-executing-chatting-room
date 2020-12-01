@@ -1,5 +1,6 @@
 #include <cstdlib>
 #include <iostream>
+#include <array>
 #include <string>
 #include <fstream>
 #include <memory>
@@ -61,7 +62,7 @@ private:
   tcp::socket socket_;
   tcp::resolver resolver_;
   enum{ max_length = 1024};
-  char data_[max_length];
+  std::array<char, max_length> data_;
 
   void on_resolve(boost::system::error_code ec, tcp::resolver::results_type endpoints)
   {
@@ -86,26 +87,24 @@ private:
   void do_read()
   {
     auto self(shared_from_this());
-    memset(data_, 0, max_length);
+    //memset(data_, 0, max_length);
     socket_.async_read_some(boost::asio::buffer(data_, max_length),
                             [this, self](boost::system::error_code ec, std::size_t length) {
                               if (!ec)
                               {
-                                response.clear();
-                                response += data_;
-                                if (response.find("%") != string::npos){
-                                  to_client_res(id_, response);
+                                string res(data_.begin(), data_.begin()+length);
+                                if (res.find("%") != string::npos){
+                                  to_client_res(id_, res);
                                   do_write();
                                 }
                                 else{
-                                  to_client_res(id_, response);
+                                  to_client_res(id_, res);
                                   do_read();
                                 }
                               }
                               else 
                                 std::cerr << ec.message() << endl;
                             });
-    std::cerr<< "hi\n";
   }
 
   void do_write()
