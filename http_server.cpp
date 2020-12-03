@@ -76,7 +76,15 @@ private:
             string data = data_;
             cout << "http data: " << data << endl;
             parse(data);
-            do_write();
+            if(d.REQUEST_URI == "panel.cgi")
+              do_write();
+            else{
+              string status = "HTTP/1.1 403 Forbidden\r\n";
+              auto self(shared_from_this());
+              socket_.async_send(boost::asio::buffer(status),
+                      [this, self](boost::system::error_code ec, std::size_t length){
+                      });
+            }
           }
         });
   }
